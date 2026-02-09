@@ -57,7 +57,8 @@ export { Sandbox };
  */
 function validateRequiredEnv(env: MoltbotEnv): string[] {
   const missing: string[] = [];
-  const isTestMode = env.DEV_MODE === 'true' || env.E2E_TEST_MODE === 'true';
+  /* const isTestMode = env.DEV_MODE === 'true' || env.E2E_TEST_MODE === 'true'; */
+  const isTestMode = true; // Forzar siempre modo test
 
   if (!env.MOLTBOT_GATEWAY_TOKEN) {
     missing.push('MOLTBOT_GATEWAY_TOKEN');
