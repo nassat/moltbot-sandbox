@@ -36,10 +36,8 @@ import configErrorHtml from './assets/config-error.html';
  * Transform error messages from the gateway to be more user-friendly.
  */
 function transformErrorMessage(message: string, host: string): string {
-  const FORCED_TOKEN = "4Z6F7QxVSDv8K7rV5utGmdh-GHTo2iQYQlMqSijJ";
-  
   if (message.includes('{REPLACE_WITH_YOUR_TOKEN}')) {
-    return `Invalid or missing token. Visit https://${host}?token=${FORCED_TOKEN}`;
+    return `Invalid or missing token. Visit https://${host}?token={REPLACE_WITH_YOUR_TOKEN}`;
   }
 
   if (message.includes('pairing required')) {
@@ -57,8 +55,7 @@ export { Sandbox };
  */
 function validateRequiredEnv(env: MoltbotEnv): string[] {
   const missing: string[] = [];
-  /* const isTestMode = env.DEV_MODE === 'true' || env.E2E_TEST_MODE === 'true'; */
-  const isTestMode = true; // Forzar siempre modo test
+  const isTestMode = env.DEV_MODE === 'true' || env.E2E_TEST_MODE === 'true';
 
   if (!env.MOLTBOT_GATEWAY_TOKEN) {
     missing.push('MOLTBOT_GATEWAY_TOKEN');
@@ -295,22 +292,22 @@ app.all('*', async (c) => {
     // Inject gateway token into WebSocket request if not already present.
     // CF Access redirects strip query params, so authenticated users lose ?token=.
     // Since the user already passed CF Access auth, we inject the token server-side.
-
-        // Since the user already passed CF Access auth, we inject the token server-side.
+    // CF Access redirects can strip query params, so authenticated users can lose ?token=.
+    // We inject the gateway token when it is missing/empty/placeholder.
     let wsRequest = request;
 
     const tokenParam = url.searchParams.get('token');
     const tokenMissingOrPlaceholder =
       !tokenParam ||
+      tokenParam.trim() === '' ||
       tokenParam === '{REPLACE_WITH_YOUR_TOKEN}' ||
       tokenParam === 'REPLACE_WITH_YOUR_TOKEN';
 
-const FORCED_TOKEN = "4Z6F7QxVSDv8K7rV5utGmdh-GHTo2iQYQlMqSijJ";
-if (FORCED_TOKEN && tokenMissingOrPlaceholder) {
-  const tokenUrl = new URL(url.toString());
-  tokenUrl.searchParams.set('token', FORCED_TOKEN);
-  wsRequest = new Request(tokenUrl.toString(), request);
-}
+    if (c.env.MOLTBOT_GATEWAY_TOKEN && tokenMissingOrPlaceholder) {
+      const tokenUrl = new URL(url.toString());
+      tokenUrl.searchParams.set('token', c.env.MOLTBOT_GATEWAY_TOKEN);
+      wsRequest = new Request(tokenUrl.toString(), request);
+    }
 
     // Get WebSocket connection to the container
 
