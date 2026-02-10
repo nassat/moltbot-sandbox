@@ -36,7 +36,7 @@ import configErrorHtml from './assets/config-error.html';
  * Transform error messages from the gateway to be more user-friendly.
  */
 function transformErrorMessage(message: string, host: string): string {
-  if (message.includes('{REPLACE_WITH_YOUR_TOKEN}')) {
+  if (message.includes('gateway token missing') || message.includes('gateway token mismatch')) {
     return `Invalid or missing token. Visit https://${host}?token={REPLACE_WITH_YOUR_TOKEN}`;
   }
 
@@ -289,9 +289,9 @@ app.all('*', async (c) => {
       console.log('[WS] URL:', url.pathname + redactedSearch);
     }
 
-    // Inject gateway token into WebSocket request if not already present.
-    // CF Access redirects strip query params, so authenticated users lose ?token=.
-    // Since the user already passed CF Access auth, we inject the token server-side.
+    // Inject gateway token into WebSocket request if token param is missing or still a placeholder.
+    // CF Access redirects can strip query params, so authenticated users can lose ?token=.
+    // Also, the UI's error banner uses placeholders like {REPLACE_WITH_YOUR_TOKEN}.
     let wsRequest = request;
 
     const tokenParam = url.searchParams.get('token');
@@ -305,8 +305,6 @@ app.all('*', async (c) => {
       tokenUrl.searchParams.set('token', c.env.MOLTBOT_GATEWAY_TOKEN);
       wsRequest = new Request(tokenUrl.toString(), request);
     }
-
-    // Get WebSocket connection to the container
 
     // Get WebSocket connection to the container
     const containerResponse = await sandbox.wsConnect(wsRequest, MOLTBOT_PORT);
