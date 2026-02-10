@@ -292,14 +292,11 @@ app.all('*', async (c) => {
     // Inject gateway token into WebSocket request if not already present.
     // CF Access redirects strip query params, so authenticated users lose ?token=.
     // Since the user already passed CF Access auth, we inject the token server-side.
-    // CF Access redirects can strip query params, so authenticated users can lose ?token=.
-    // We inject the gateway token when it is missing/empty/placeholder.
     let wsRequest = request;
 
     const tokenParam = url.searchParams.get('token');
     const tokenMissingOrPlaceholder =
       !tokenParam ||
-      tokenParam.trim() === '' ||
       tokenParam === '{REPLACE_WITH_YOUR_TOKEN}' ||
       tokenParam === 'REPLACE_WITH_YOUR_TOKEN';
 
@@ -310,7 +307,6 @@ app.all('*', async (c) => {
     }
 
     // Get WebSocket connection to the container
-
 
     // Get WebSocket connection to the container
     const containerResponse = await sandbox.wsConnect(wsRequest, MOLTBOT_PORT);
