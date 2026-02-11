@@ -44,30 +44,30 @@ export async function syncToR2(sandbox: Sandbox, env: MoltbotEnv): Promise<SyncR
   // Determine which config directory exists
   // Check new path first, fall back to legacy
   // Use exit code (0 = exists) rather than stdout parsing to avoid log-flush races
-  let configDir = '/root/.openclaw';
+    let configDir = '/root/.openclaw';
   try {
-    const checkNew = await sandbox.startProcess('test -f /root/.openclaw/openclaw.json');
-    await waitForProcess(checkNew, 5000);
-    if (checkNew.exitCode !== 0) {
-      const checkLegacy = await sandbox.startProcess('test -f /root/.clawdbot/clawdbot.json');
-      await waitForProcess(checkLegacy, 5000);
-      if (checkLegacy.exitCode === 0) {
-        configDir = '/root/.clawdbot';
-      } else {
-        return {
-          success: false,
-          error: 'Sync aborted: no config file found',
-          details: 'Neither openclaw.json nor clawdbot.json found in config directory.',
-        };
-      }
+    const checkCmd = 'if [ -f /root/.openclaw/openclaw.json ]; then echo "new"; elif [ -f /root/.clawdbot/clawdbot.json ]; then echo "legacy"; else echo "none"; fi';
+    const checkProc = await sandbox.startProcess(checkCmd);
+    const logs = await checkProc.getLogs();
+    const result = logs.stdout?.trim();
+
+    if (result === 'legacy') {
+      configDir = '/root/.clawdbot';
+    } else if (result !== 'new') {
+      return {
+        success: false,
+        error: 'Sync aborted: no config file found',
+        details: `Discovery result: ${result || 'empty'}.`,
+      };
     }
   } catch (err) {
     return {
       success: false,
       error: 'Failed to verify source files',
-      details: err instanceof Error ? err.message : 'Unknown error',
+      details: err instanceof Error ? err.message : 'Sandbox error',
     };
   }
+
 
   // Sync to the new openclaw/ R2 prefix (even if source is legacy .clawdbot)
   // Also sync workspace directory (excluding skills since they're synced separately)
