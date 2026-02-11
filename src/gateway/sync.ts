@@ -44,24 +44,30 @@ export async function syncToR2(sandbox: Sandbox, env: MoltbotEnv): Promise<SyncR
   // Determine which config directory exists
   // Check new path first, fall back to legacy
   // Use exit code (0 = exists) rather than stdout parsing to avoid log-flush races
-  let configDir = '/root/.openclaw';
-  try {
-    const checkNew = await sandbox.startProcess('test -f /root/.openclaw/openclaw.json');
-    await waitForProcess(checkNew, 5000);
-    if (checkNew.exitCode !== 0) {
-      const checkLegacy = await sandbox.startProcess('test -f /root/.clawdbot/clawdbot.json');
-      await waitForProcess(checkLegacy, 5000);
-      if (checkLegacy.exitCode === 0) {
-        configDir = '/root/.clawdbot';
-      } else {
-        return {
-          success: false,
-          error: 'Sync aborted: no config file found',
-          details: 'Neither openclaw.json nor clawdbot.json found in config directory.',
-        };
-      }
+let configDir = '/root/.openclaw';
+try {
+  // Verificación del nuevo path
+  const checkNew = await sandbox.startProcess('test -f /root/.openclaw/openclaw.json');
+  const statusNew = await waitForProcess(checkNew, 5000); // Captura el retorno de la utilidad
+  
+  // USAR EL STATUS RETORNADO, NO LA PROPIEDAD DEL OBJETO INICIAL
+  if (statusNew.exitCode !== 0) {
+    // Verificación del legacy path
+    const checkLegacy = await sandbox.startProcess('test -f /root/.clawdbot/clawdbot.json');
+    const statusLegacy = await waitForProcess(checkLegacy, 5000);
+    
+    if (statusLegacy.exitCode === 0) {
+      configDir = '/root/.clawdbot';
+    } else {
+      // Si llegamos aquí, realmente no existen
+      return {
+        success: false,
+        error: 'Sync aborted: no config file found',
+        details: `Exit codes: New(${statusNew.exitCode}) Legacy(${statusLegacy.exitCode})`,
+      };
     }
-  } catch (err) {
+  }
+} catch (err) {
     return {
       success: false,
       error: 'Failed to verify source files',
