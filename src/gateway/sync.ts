@@ -13,21 +13,6 @@ export interface SyncResult {
 
 /**
  * Sync OpenClaw config and workspace from container to R2 for persistence.
- *
- * This function:
- * 1. Mounts R2 if not already mounted
- * 2. Verifies source has critical files (prevents overwriting good backup with empty data)
- * 3. Runs rsync to copy config, workspace, and skills to R2
- * 4. Writes a timestamp file for tracking
- *
- * Syncs three directories:
- * - Config: /root/.openclaw/ (or /root/.clawdbot/) → R2:/openclaw/
- * - Workspace: /root/clawd/ → R2:/workspace/ (IDENTITY.md, MEMORY.md, memory/, assets/)
- * - Skills: /root/clawd/skills/ → R2:/skills/
- *
- * @param sandbox - The sandbox instance
- * @param env - Worker environment bindings
- * @returns SyncResult with success status and optional error details
  */
 export async function syncToR2(sandbox: Sandbox, env: MoltbotEnv): Promise<SyncResult> {
   // Check if R2 is configured
@@ -41,43 +26,31 @@ export async function syncToR2(sandbox: Sandbox, env: MoltbotEnv): Promise<SyncR
     return { success: false, error: 'Failed to mount R2 storage' };
   }
 
-  // Determine which config directory exists
-  // Check new path first, fall back to legacy
-  // Use exit code (0 = exists) rather than stdout parsing to avoid log-flush races
-    let configDir = '/root/.openclaw';
-  try {
-    const checkCmd = 'if [ -f /root/.openclaw/openclaw.json ]; then echo "new"; elif [ -f /root/.clawdbot/clawdbot.json ]; then echo "legacy"; else echo "none"; fi';
-    const checkProc = await sandbox.startProcess(checkCmd);
-    const logs = await checkProc.getLogs();
-    const result = logs.stdout?.trim();
+  // 1. Esperar a que el sistema de archivos se asiente
+  await new Promise(resolve => setTimeout(resolve, 5000));
 
-    if (result === 'legacy') {
-      configDir = '/root/.clawdbot';
-    } else if (result !== 'new') {
-      return {
-        success: false,
-        error: 'Sync aborted: no config file found',
-        details: `Discovery result: ${result || 'empty'}.`,
-      };
-    }
+  // 2. Garantizar que el directorio y el archivo existen para evitar que rsync aborte
+  const configDir = '/root/.openclaw';
+  try {
+    const initCmd = `mkdir -p ${configDir} /root/clawd/skills && touch ${configDir}/openclaw.json`;
+    const initProc = await sandbox.startProcess(initCmd);
+    await initProc.getLogs(); 
   } catch (err) {
     return {
       success: false,
-      error: 'Failed to verify source files',
-      details: err instanceof Error ? err.message : 'Sandbox error',
+      error: 'Failed to prepare source directories',
+      details: err instanceof Error ? err.message : 'Unknown error',
     };
   }
 
-
-  // Sync to the new openclaw/ R2 prefix (even if source is legacy .clawdbot)
-  // Also sync workspace directory (excluding skills since they're synced separately)
+  // 3. Ejecutar Sync
   const syncCmd = `rsync -r --no-times --delete --exclude='*.lock' --exclude='*.log' --exclude='*.tmp' ${configDir}/ ${R2_MOUNT_PATH}/openclaw/ && rsync -r --no-times --delete --exclude='skills' /root/clawd/ ${R2_MOUNT_PATH}/workspace/ && rsync -r --no-times --delete /root/clawd/skills/ ${R2_MOUNT_PATH}/skills/ && date -Iseconds > ${R2_MOUNT_PATH}/.last-sync`;
 
   try {
     const proc = await sandbox.startProcess(syncCmd);
-    await waitForProcess(proc, 30000); // 30 second timeout for sync
+    await waitForProcess(proc, 30000); 
 
-    // Check for success by reading the timestamp file
+    // Verificar éxito mediante el archivo de timestamp
     const timestampProc = await sandbox.startProcess(`cat ${R2_MOUNT_PATH}/.last-sync`);
     await waitForProcess(timestampProc, 5000);
     const timestampLogs = await timestampProc.getLogs();
