@@ -7,6 +7,11 @@
   "observability": {
     "enabled": true,
   },
+  "vars": {
+    "LLM_PROVIDER": "openai",
+    "MODEL_VERSION": "gpt-5-o-2024-05-13", 
+    "AVAILABLE_MODELS": "openai/gpt-5-o-2024-05-13,anthropic/claude-3-5-sonnet-latest,google/gemini-1.5-pro-latest"
+  },
   // Static assets for admin UI (built by vite)
   "assets": {
     "directory": "./dist/client",
